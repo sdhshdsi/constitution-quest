@@ -1,0 +1,567 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Constitution Quest: Temple of Knowledge</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#171a29;color:#fff;font-family:system-ui,sans-serif;text-align:center}
+header{padding:9px 5px;background:#22273b;border-bottom:2px solid #b18a54}
+h1{margin:2px;color:#f6d18a;font-size:21px}
+#status{font-size:12px;color:#e1d6bd;margin:5px}
+#stage{max-width:960px;margin:auto;position:relative}
+canvas{width:100%;height:auto;display:block;touch-action:none}
+#toast{min-height:22px;font-size:12px;color:#ffe4a3;padding:3px}
+.controls{max-width:480px;margin:auto;padding:8px;display:grid;grid-template-columns:repeat(5,1fr);gap:7px}
+.ctrl{height:53px;border:1px solid #8f9ab5;border-radius:12px;background:#35405b;color:white;font-size:23px;font-weight:bold;touch-action:none}
+.ctrl:active{background:#687ca5}
+#use{background:#926b37;font-size:14px}
+.note{font-size:11px;color:#b9c3d8;padding:0 10px 12px}
+.overlay{position:fixed;inset:0;z-index:10;background:#090d1ceF;display:flex;align-items:center;justify-content:center;padding:13px}
+.hidden{display:none!important}
+.panel{width:100%;max-width:460px;max-height:92vh;overflow-y:auto;background:#252e46;border:2px solid #b49a6a;border-radius:18px;padding:19px 15px}
+.panel h2{color:#ffdc91;margin:5px 0 13px}
+.panel p{line-height:1.55;font-size:14px}
+.primary{background:#f4ce83;color:#2b2631;border:0;border-radius:10px;padding:12px 18px;font-weight:bold;margin:8px 0}
+.answer{display:block;width:100%;text-align:left;padding:11px;margin:7px 0;border-radius:10px;border:1px solid #687c9f;background:#354460;color:white;font-size:14px}
+.answer:disabled{opacity:.75}
+#feedback{min-height:23px;font-weight:bold}
+</style>
+</head>
+<body>
+
+<header>
+<h1>🏛️ CONSTITUTION QUEST</h1>
+<div id="status">Level 1 · Gerbang 1/5 · ⭐ 0</div>
+</header>
+
+<div id="stage">
+<canvas id="game" width="900" height="480"></canvas>
+</div>
+<div id="toast">Jelajahi kuil dan temukan gerbang berikutnya.</div>
+
+<div class="controls">
+<button class="ctrl" id="left">◀</button>
+<button class="ctrl" id="up">⬆</button>
+<button class="ctrl" id="jump">⤒</button>
+<button class="ctrl" id="down">⬇</button>
+<button class="ctrl" id="right">▶</button>
+<button class="ctrl" id="use" style="grid-column:2/5">✦ INTERAKSI / BUKA TUAS</button>
+</div>
+<div class="note">◀ ▶ Bergerak · ⬆⬇ Memanjat tangga · ⤒ Melompat · INTERAKSI untuk tuas</div>
+
+<div class="overlay" id="intro">
+<div class="panel">
+<h2>🗝️ Temple of Knowledge</h2>
+<p>Legenda mengatakan tiga kuil kuno menyimpan rahasia konstitusi Indonesia.</p>
+<p>Jelajahi ruangan batu, panjat tangga, lompati jurang dan duri, aktifkan tuas, lalu jawab pertanyaan untuk membuka gerbang.</p>
+<p><b>3 level · 15 soal · 1 petualang.</b></p>
+<button class="primary" id="start">MULAI PETUALANGAN</button>
+</div>
+</div>
+
+<div class="overlay hidden" id="quiz">
+<div class="panel">
+<p id="qlabel">LEVEL 1 · GERBANG 1</p>
+<h2>📜 Ujian Pengetahuan</h2>
+<p id="question"></p>
+<div id="answers"></div>
+<p id="feedback"></p>
+<button class="primary hidden" id="continue">LANJUTKAN ➜</button>
+</div>
+</div>
+
+<div class="overlay hidden" id="finish">
+<div class="panel">
+<h2>🏆 PENJAGA KONSTITUSI!</h2>
+<p>Kamu berhasil menaklukkan ketiga kuil dan menjawab seluruh pertanyaan.</p>
+<h1>15 / 15 ⭐</h1>
+<p>Petualangan selesai. Rahasia kuil kini menjadi milikmu!</p>
+<button class="primary" onclick="location.reload()">MAIN LAGI ↻</button>
+</div>
+</div>
+
+<script>
+"use strict";
+
+// ================= SOAL =================
+
+const Q = [
+[
+{q:"Apa tujuan utama konstitusi dalam kehidupan berbangsa dan bernegara?",a:["Memperluas kekuasaan pemerintah","Membatasi kekuasaan pemerintah dan menjamin hak warga negara","Menghapus seluruh peraturan negara","Memberikan kekuasaan penuh kepada Presiden"],c:1},
+{q:"Konstitusi negara berfungsi untuk menjamin hak-hak dasar milik siapa?",a:["Presiden saja","Anggota DPR saja","Warga negara","Pejabat pemerintah saja"],c:2},
+{q:"Kapan UUD 1945 pertama kali ditetapkan sebagai undang-undang dasar negara Indonesia?",a:["17 Agustus 1945","18 Agustus 1945","27 Desember 1949","17 Agustus 1950"],c:1},
+{q:"Lembaga yang menetapkan UUD 1945 pada tanggal 18 Agustus 1945 adalah ...",a:["BPUPKI","DPR","PPKI","MPR"],c:2},
+{q:"Rancangan hukum dasar yang menjadi dasar penetapan UUD 1945 dihasilkan dari sidang ...",a:["PPKI pertama","BPUPKI kedua","DPR pertama","MPR kedua"],c:1}
+],
+[
+{q:"Konstitusi apakah yang berlaku di Indonesia sejak 27 Desember 1949?",a:["UUD 1945","UUDS 1950","Konstitusi RIS","Piagam Jakarta"],c:2},
+{q:"Sejak tanggal 17 Agustus 1950, Indonesia memberlakukan ...",a:["Konstitusi RIS","UUDS 1950","UUD 1945 hasil amendemen","Piagam Jakarta"],c:1},
+{q:"Peristiwa apa yang memberlakukan kembali UUD 1945 pada tahun 1959?",a:["Dekrit Presiden 5 Juli 1959","Sidang BPUPKI kedua","Proklamasi Kemerdekaan","Amendemen keempat"],c:0},
+{q:"UUD NRI Tahun 1945 mengalami berapa kali amendemen pada periode 1999–2002?",a:["Satu kali","Dua kali","Tiga kali","Empat kali"],c:3},
+{q:"Menurut Naoki Kobayashi, undang-undang dasar membatasi dan mengendalikan kekuasaan politik untuk ...",a:["Memperkuat kekuasaan tanpa batas","Menjamin hak-hak rakyat","Menghapus lembaga negara","Mengurangi hak warga negara"],c:1}
+],
+[
+{q:"Pasal berapakah yang mengatur pembatasan masa jabatan Presiden dan Wakil Presiden?",a:["Pasal 4","Pasal 6","Pasal 7","Pasal 12"],c:2},
+{q:"Menurut Pasal 7C UUD NRI Tahun 1945, Presiden tidak dapat ...",a:["Mengangkat menteri","Menjalankan pemerintahan","Membekukan dan/atau membubarkan DPR","Menerima duta negara lain"],c:2},
+{q:"Pasal 7A dan 7B UUD NRI Tahun 1945 mengatur tentang ...",a:["Syarat calon Presiden","Pemberhentian Presiden dan/atau Wakil Presiden dalam masa jabatannya","Pemberian gelar kehormatan","Pembentukan dewan pertimbangan"],c:1},
+{q:"Pasal 11 UUD NRI Tahun 1945 mengatur antara lain tentang ...",a:["Pernyataan perang, perdamaian, dan perjanjian dengan negara lain","Pemilihan kepala daerah","Pembentukan partai politik","Pendidikan dasar warga negara"],c:0},
+{q:"Apa arti Indonesia sebagai constitutional state?",a:["Negara yang pemerintahannya tidak dibatasi aturan","Negara yang penyelenggaraan kekuasaannya didasarkan dan dibatasi oleh konstitusi","Negara yang seluruh kekuasaannya berada pada Presiden","Negara yang tidak memiliki undang-undang dasar"],c:1}
+]
+];
+
+// ================= DUNIA DAN LEVEL =================
+
+const themes = [
+ {name:"Kuil Sejarah",sky:"#a6c6d1",stone:"#827c72",dark:"#494c51",floor:"#766c60",accent:"#d6b578",flag:"#9d5745"},
+ {name:"Reruntuhan Nusantara",sky:"#e4c29a",stone:"#a58a6a",dark:"#594b40",floor:"#876b50",accent:"#f0c36d",flag:"#4b8c78"},
+ {name:"Kuil Konstitusi",sky:"#9ba5ca",stone:"#777b9d",dark:"#404660",floor:"#626681",accent:"#ffe09a",flag:"#c17b58"}
+];
+
+// Ukuran dunia 2D. Koordinat y makin besar berarti makin ke bawah.
+const W = 2400, H = 480;
+const floorY = 420;
+const gateX = [400,800,1200,1600,2000];
+
+const layouts = [
+ {
+  gaps:[[490,570],[900,980],[1320,1400],[1710,1790]],
+  spikes:[[650,45],[1060,45],[1490,45],[1870,45]],
+  platforms:[[180,330,115],[340,260,95],[590,335,110],[750,275,100],[980,325,120],[1140,245,110],[1410,330,100],[1550,270,100],[1800,330,100],[1940,265,115],[2180,325,100]],
+  ladders:[[250,330,90],[690,330,90],[1080,325,80],[1500,330,80],[1900,330,80]],
+  switches:[720,1510],
+  bridges:[[500,570],[1310,1400]]
+ },
+ {
+  gaps:[[430,520],[850,940],[1260,1350],[1690,1780]],
+  spikes:[[600,50],[1020,50],[1440,50],[1850,50]],
+  platforms:[[160,320,110],[320,260,100],[540,330,110],[760,280,100],[950,325,100],[1110,250,110],[1380,320,100],[1550,260,100],[1800,320,110],[1980,265,110],[2190,320,110]],
+  ladders:[[210,320,100],[650,330,80],[1050,325,75],[1490,320,90],[1920,320,85]],
+  switches:[640,1510],
+  bridges:[[430,520],[1260,1350]]
+ },
+ {
+  gaps:[[480,570],[900,990],[1320,1410],[1740,1830]],
+  spikes:[[650,45],[1080,45],[1510,45],[1930,45]],
+  platforms:[[170,325,110],[340,255,100],[590,330,105],[760,270,110],[1000,325,110],[1160,240,110],[1420,330,110],[1580,265,100],[1850,330,110],[2030,255,100],[2200,325,110]],
+  ladders:[[230,325,85],[690,330,90],[1100,325,80],[1540,330,85],[1950,330,85]],
+  switches:[730,1550],
+  bridges:[[480,570],[1320,1410]]
+ }
+];
+
+let level=0, gate=0, score=0;
+let playing=false, quizOpen=false, answered=false;
+let camera=0, lastTime=0;
+let toastTimer=0;
+const keys={left:false,right:false,up:false,down:false};
+let jumpHeld=false;
+const player={x:45,y:floorY-42,w:26,h:42,vx:0,vy:0,ground:false,onLadder:false};
+let switchOn=false;
+
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+const status=document.getElementById("status");
+const toast=document.getElementById("toast");
+
+function theme(){return themes[level]}
+function layout(){return layouts[level]}
+function say(s){toast.textContent=s}
+function updateStatus(){
+ status.textContent=`Level ${level+1} · Gerbang ${Math.min(gate+1,5)}/5 · ⭐ ${score}`;
+}
+function resetPlayer(x){
+ player.x=x;
+ player.y=floorY-player.h;
+ player.vx=player.vy=0;
+ player.ground=true;
+ player.onLadder=false;
+}
+function rect(x,y,w,h,c){
+ ctx.fillStyle=c;
+ ctx.fillRect(x-camera,y,w,h);
+}
+function gapAt(x){
+ return layout().gaps.some(g=>x+player.w>g[0]&&x<g[1]);
+}
+function bridgeActiveAt(x){
+ return switchOn&&layout().bridges.some(g=>x+player.w>g[0]&&x<g[1]);
+}
+function solidFloorAt(x){
+ return !gapAt(x)||bridgeActiveAt(x);
+}
+function boxHit(a,b){
+ return a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y;
+}
+
+// ================= GAMBAR DUNIA =================
+
+function drawStone(x,y,w,h){
+ const t=theme();
+ rect(x,y,w,h,t.stone);
+ ctx.strokeStyle=t.dark;
+ ctx.lineWidth=2;
+ for(let xx=x+30;xx<x+w;xx+=60){
+   ctx.beginPath();
+   ctx.moveTo(xx-camera,y);
+   ctx.lineTo(xx-camera,y+h);
+   ctx.stroke();
+ }
+ for(let yy=y+24;yy<y+h;yy+=32){
+   ctx.beginPath();
+   ctx.moveTo(x-camera,yy);
+   ctx.lineTo(x+w-camera,yy);
+   ctx.stroke();
+ }
+}
+function draw(){
+ const t=theme(),l=layout();
+ const sky=ctx.createLinearGradient(0,0,0,H);
+ sky.addColorStop(0,t.sky);
+ sky.addColorStop(1,"#e7ddca");
+ ctx.fillStyle=sky;
+ ctx.fillRect(0,0,900,H);
+
+ // Latar kuil
+ for(let i=0;i<8;i++){
+   const x=i*330-(camera*.25%330);
+   ctx.fillStyle=t.dark;
+   ctx.fillRect(x,85,185,260);
+   ctx.fillStyle=t.stone;
+   ctx.fillRect(x-12,75,209,18);
+   ctx.fillRect(x+15,100,16,230);
+   ctx.fillRect(x+154,100,16,230);
+   ctx.fillStyle="#171c2a66";
+   ctx.fillRect(x+48,130,85,215);
+ }
+ // Dekorasi
+ for(let x=80;x<W;x+=250){
+   rect(x,355,18,65,t.dark);
+   rect(x-8,347,34,10,t.accent);
+   rect(x-8,411,34,10,t.dark);
+ }
+
+ // Lantai dibagi sesuai jurang
+ let start=0;
+ const gaps=l.gaps.slice().sort((a,b)=>a[0]-b[0]);
+ gaps.forEach(g=>{
+   drawStone(start,floorY,g[0]-start,60);
+   if(switchOn&&l.bridges.some(b=>b[0]===g[0]&&b[1]===g[1])){
+     rect(g[0],floorY,g[1]-g[0],14,t.accent);
+     rect(g[0],floorY+14,g[1]-g[0],46,t.dark);
+   }
+   start=g[1];
+ });
+ drawStone(start,floorY,W-start,60);
+
+ // Platform batu
+ l.platforms.forEach(([x,y,w])=>{
+   drawStone(x,y,w,15);
+   rect(x,y,w,4,t.accent);
+ });
+
+ // Tangga
+ l.ladders.forEach(([x,y,h])=>{
+   rect(x,y,7,h,t.accent);
+   rect(x+23,y,7,h,t.accent);
+   for(let yy=y+8;yy<y+h;yy+=17)rect(x+7,yy,16,4,t.accent);
+ });
+
+ // Duri
+ l.spikes.forEach(([x,w])=>{
+   for(let sx=x;sx<x+w;sx+=20){
+     ctx.fillStyle="#e95f60";
+     ctx.beginPath();
+     ctx.moveTo(sx-camera,floorY);
+     ctx.lineTo(sx+10-camera,floorY-23);
+     ctx.lineTo(sx+20-camera,floorY);
+     ctx.fill();
+   }
+ });
+
+ // Tuas dan tombol
+ l.switches.forEach((x,i)=>{
+   rect(x, floorY-22,24,22,t.dark);
+   rect(x+8,floorY-45,8,26,switchOn?t.accent:"#b78a61");
+   rect(x+1,floorY-49,23,7,switchOn?"#9ee7a6":"#d4b38a");
+ });
+
+ // Gerbang soal
+ gateX.forEach((x,i)=>{
+   const open=i<gate;
+   rect(x,floorY-100,12,100,open?"#78b58d":t.dark);
+   rect(x+63,floorY-100,12,100,open?"#78b58d":t.dark);
+   rect(x-4,floorY-107,83,13,open?"#a7e0a8":t.accent);
+   rect(x+12,floorY-86,51,82,open?"#5c9e76":"#6b594b");
+   ctx.fillStyle="#fff0c4";
+   ctx.textAlign="center";
+   ctx.font="bold 12px system-ui";
+   ctx.fillText(open?"✓":"SOAL "+(i+1),x+38-camera,floorY-118);
+   if(!open){
+     rect(x+35,floorY-62,8,16,t.accent);
+     rect(x+30,floorY-48,18,5,t.accent);
+   }
+ });
+
+ // Tanda akhir
+ rect(2310,floorY-115,7,115,t.accent);
+ ctx.fillStyle=t.flag;
+ ctx.beginPath();
+ ctx.moveTo(2317-camera,floorY-115);
+ ctx.lineTo(2375-camera,floorY-97);
+ ctx.lineTo(2317-camera,floorY-77);
+ ctx.fill();
+ ctx.fillStyle="#fff2cc";
+ ctx.textAlign="center";
+ ctx.font="bold 14px system-ui";
+ ctx.fillText("EXIT",2340-camera,floorY-135);
+
+ // Karakter original: Penjelajah
+ const x=player.x-camera,y=player.y;
+ ctx.fillStyle="#3d4c70";
+ ctx.fillRect(x+3,y+17,21,20);
+ ctx.fillStyle="#cba878";
+ ctx.fillRect(x+5,y+7,17,15);
+ ctx.fillStyle="#f0cda0";
+ ctx.beginPath();ctx.arc(x+13,y+9,10,0,Math.PI*2);ctx.fill();
+ ctx.fillStyle="#4a342b";
+ ctx.fillRect(x+3,y+1,21,7);
+ ctx.fillStyle="#fff3d0";
+ ctx.fillRect(x+17,y+8,3,3);
+ ctx.fillStyle="#303344";
+ ctx.fillRect(x+5,y+36,7,6);
+ ctx.fillRect(x+17,y+36,7,6);
+ ctx.fillStyle="#f0d9a9";
+ ctx.fillRect(x+4,y+19,5,9);
+
+ // Nama level
+ ctx.textAlign="left";
+ ctx.font="bold 16px system-ui";
+ ctx.fillStyle="#fff9e8";
+ ctx.fillText(t.name,14,25);
+}
+
+// ================= FISIKA =================
+
+function update(dt){
+ if(!playing||quizOpen)return;
+ const l=layout(),oldBottom=player.y+player.h;
+ const speed=0.24;
+
+ player.vx=((keys.right?1:0)-(keys.left?1:0))*speed;
+ let climbing=false;
+
+ // Naik-turun tangga
+ l.ladders.forEach(([x,y,h])=>{
+   const ladder={x:x-9,y:y-4,w:48,h:h+10};
+   if(boxHit(player,ladder)&&(keys.up||keys.down)){
+     climbing=true;
+   }
+ });
+
+ if(climbing){
+   player.onLadder=true;
+   player.vy=0;
+   if(keys.up)player.y-=0.16*dt;
+   if(keys.down)player.y+=0.16*dt;
+ }else{
+   player.onLadder=false;
+   player.vy+=0.0011*dt;
+   player.y+=player.vy*dt;
+ }
+
+ player.x+=player.vx*dt;
+ player.x=Math.max(0,Math.min(W-player.w,player.x));
+ player.ground=false;
+
+ // Mendarat pada lantai
+ const bottom=player.y+player.h;
+ if(player.vy>=0&&!climbing&&bottom>=floorY&&oldBottom<=floorY+10&&solidFloorAt(player.x)){
+   player.y=floorY-player.h;
+   player.vy=0;
+   player.ground=true;
+ }
+
+ // Platform tabrakan
+ l.platforms.forEach(([x,y,w])=>{
+   if(player.vy>=0&&player.x+player.w>x&&player.x<x+w&&oldBottom<=y+8&&player.y+player.h>=y&&player.y<y){
+     player.y=y-player.h;
+     player.vy=0;
+     player.ground=true;
+   }
+ });
+
+ // Keluar dari bawah level: respawn
+ if(player.y>H+50){
+   resetPlayer(gate===0?35:gateX[gate-1]+85);
+   say("Kamu jatuh! Coba rute lain.");
+ }
+
+ // Duri menyebabkan respawn
+ for(const [x,w] of l.spikes){
+   if(boxHit(player,{x:x+3,y:floorY-21,w:w-6,h:22})){
+     resetPlayer(gate===0?35:gateX[gate-1]+85);
+     say("Awas duri! Coba lagi.");
+     break;
+   }
+ }
+
+ // Gerbang memicu kuis
+ if(gate<5&&player.x+player.w>=gateX[gate]){
+   player.x=gateX[gate]-player.w-2;
+   openQuiz();
+ }
+
+ // Pintu keluar
+ if(gate===5&&player.x>2250){
+   if(level===2){
+     playing=false;
+     document.getElementById("finish").classList.remove("hidden");
+   }else{
+     level++;
+     gate=0;
+     switchOn=false;
+     resetPlayer(35);
+     camera=0;
+     updateStatus();
+     say("Level baru terbuka! Jelajahi kuil berikutnya.");
+   }
+ }
+
+ camera=Math.max(0,Math.min(W-900,player.x-270));
+}
+
+// ================= TUAS =================
+
+function interact(){
+ if(!playing||quizOpen)return;
+ const near=layout().switches.some(x=>Math.abs(player.x-x)<85&&Math.abs(player.y-floorY)<90);
+ if(near){
+   switchOn=!switchOn;
+   say(switchOn?"Jembatan batu telah terbuka!":"Jembatan batu ditutup.");
+ }else{
+   say("Cari tuas batu di dekat jalur yang terhalang.");
+ }
+}
+
+// ================= KUIS =================
+
+function openQuiz(){
+ if(quizOpen||gate>=5)return;
+ quizOpen=true;
+ answered=false;
+ keys.left=keys.right=keys.up=keys.down=false;
+ const q=Q[level][gate];
+ document.getElementById("qlabel").textContent=`LEVEL ${level+1} · GERBANG ${gate+1}/5`;
+ document.getElementById("question").textContent=q.q;
+ document.getElementById("feedback").textContent="";
+ document.getElementById("continue").classList.add("hidden");
+ const answers=document.getElementById("answers");
+ answers.innerHTML="";
+ q.a.forEach((a,i)=>{
+   const b=document.createElement("button");
+   b.className="answer";
+   b.textContent="ABCD"[i]+". "+a;
+   b.onclick=()=>checkAnswer(i);
+   answers.appendChild(b);
+ });
+ document.getElementById("quiz").classList.remove("hidden");
+}
+
+function checkAnswer(choice){
+ if(answered)return;
+ const q=Q[level][gate];
+ const feedback=document.getElementById("feedback");
+ if(choice===q.c){
+   answered=true;
+   score++;
+   feedback.textContent="BENAR! Gerbang berhasil dibuka! ✨";
+   feedback.style.color="#9ce7ad";
+   document.querySelectorAll(".answer").forEach(b=>b.disabled=true);
+   document.getElementById("continue").classList.remove("hidden");
+ }else{
+   feedback.textContent="Belum tepat! Coba pikirkan lagi. 💡";
+   feedback.style.color="#ffb4a9";
+ }
+}
+
+document.getElementById("continue").onclick=()=>{
+ document.getElementById("quiz").classList.add("hidden");
+ quizOpen=false;
+ gate++;
+ updateStatus();
+ if(gate<5)resetPlayer(gateX[gate-1]+90);
+ else resetPlayer(2110);
+ say("Gerbang terbuka. Teruskan petualanganmu!");
+};
+
+// ================= KONTROL =================
+
+function bind(id,key){
+ const b=document.getElementById(id);
+ b.addEventListener("pointerdown",e=>{
+   e.preventDefault();
+   if(!playing||quizOpen)return;
+   if(key==="jump"){
+     if(player.ground&&!jumpHeld&&!player.onLadder){
+       player.vy=-0.48;
+       player.ground=false;
+     }
+     jumpHeld=true;
+   }else keys[key]=true;
+ });
+ const release=e=>{
+   e.preventDefault();
+   if(key==="jump")jumpHeld=false;
+   else keys[key]=false;
+ };
+ b.addEventListener("pointerup",release);
+ b.addEventListener("pointercancel",release);
+ b.addEventListener("lostpointercapture",release);
+}
+bind("left","left");
+bind("right","right");
+bind("up","up");
+bind("down","down");
+bind("jump","jump");
+
+document.getElementById("use").addEventListener("click",interact);
+
+document.addEventListener("keydown",e=>{
+ if(e.key==="ArrowLeft"||e.key==="a")keys.left=true;
+ if(e.key==="ArrowRight"||e.key==="d")keys.right=true;
+ if(e.key==="ArrowUp"||e.key==="w")keys.up=true;
+ if(e.key==="ArrowDown"||e.key==="s")keys.down=true;
+ if((e.key===" "||e.key==="ArrowUp")&&player.ground&&!quizOpen){
+   player.vy=-0.48;player.ground=false;
+ }
+ if(e.key==="e")interact();
+});
+document.addEventListener("keyup",e=>{
+ if(e.key==="ArrowLeft"||e.key==="a")keys.left=false;
+ if(e.key==="ArrowRight"||e.key==="d")keys.right=false;
+ if(e.key==="ArrowUp"||e.key==="w")keys.up=false;
+ if(e.key==="ArrowDown"||e.key==="s")keys.down=false;
+});
+
+document.getElementById("start").onclick=()=>{
+ document.getElementById("intro").classList.add("hidden");
+ playing=true;
+ say("Temukan gerbang pertama!");
+};
+
+function loop(time){
+ const dt=Math.min(time-(lastTime||time),32);
+ lastTime=time;
+ update(dt);
+ draw();
+ requestAnimationFrame(loop);
+}
+resetPlayer(35);
+updateStatus();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
